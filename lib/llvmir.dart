@@ -1,9 +1,27 @@
 library llvmir;
 
 part 'src/type.dart';
+part 'global_var/int.dart';
+part 'global_var/string.dart';
+part 'global_var/global_var.dart';
+part 'literals/literals.dart';
 
 abstract class ToIr {
   String toIr();
+}
+
+class IrModule implements ToIr, IrTopLevel {
+  List<IrTopLevel> constructs = <IrTopLevel>[];
+
+  IrModule(this.constructs);
+
+  IrModule add(IrTopLevel construct) {
+    constructs.add(construct);
+    return this;
+  }
+
+  @override
+  String toIr() => constructs.map((c) => c.toIr()).join('\n\n');
 }
 
 /// Top level construct
@@ -19,8 +37,6 @@ class IrArg implements ToIr {
   String toIr() {
     StringBuffer sb = new StringBuffer();
     sb.write(type.toIr());
-    sb.write(' ');
-    sb.write(name);
     return sb.toString();
   }
 }
@@ -102,22 +118,32 @@ class IrVar implements IrVarBase, ToIr, IrRhsExpression {
   String toIr() => '${type.toIr()} $name';
 }
 
-class IrVarI8 implements IrVarBase, ToIr, IrRhsExpression, IrIntData {
+abstract class IrIntVar implements IrVarBase, IrIntData {}
+
+class IrVarI8 implements ToIr, IrRhsExpression, IrIntVar {
   final IrType type = irI8;
 
   String name;
 
+  IrVarI8(this.name);
+
   @override
   String toIr() => '${type.toIr()} $name';
+
+  @override
+  String toIrData() => name;
 }
 
-class IrVarI32 implements IrVarBase, ToIr, IrRhsExpression, IrIntData {
+class IrVarI32 implements ToIr, IrRhsExpression, IrIntVar {
   final IrType type = irI32;
 
   String name;
 
   @override
   String toIr() => '${type.toIr()} $name';
+
+  @override
+  String toIrData() => name;
 }
 
 class IrFuncDeclr implements ToIr, IrTopLevel {
@@ -161,81 +187,6 @@ class IrDeclareArg implements ToIr {
   }
 }
 
-class IrGlobalVarDecl implements ToIr, IrTopLevel {
-  String name;
-
-  IrType type;
-
-  IrLinkage linkage = IrLinkage.private;
-
-  IrGlobalVarDecl(this.name) {
-    throw new UnimplementedError();
-  }
-
-  @override
-  String toIr() {
-    StringBuffer sb = new StringBuffer();
-    sb.write('@$name = ${linkage.toIr()}');
-    throw new UnimplementedError();
-    // TODO
-    return sb.toString();
-  }
-}
-
-class IrGlobalStringConstantDecl implements ToIr, IrTopLevel {
-  String name;
-
-  String value;
-
-  IrLinkage linkage = IrLinkage.private;
-
-  int size;
-
-  IrGlobalStringConstantDecl(this.name);
-
-  IrGlobalStringConstantDecl setValue(String value) {
-    this.value = value;
-    this.size = value.length; // TODO
-    return this;
-  }
-
-  @override
-  String toIr() =>
-      '@$name = ${linkage.toIr()} unnamed_addr constant [$size x i8] c"${value}"';
-}
-
-class IrLinkage implements ToIr {
-  final String representation;
-
-  const IrLinkage._(this.representation);
-
-  @override
-  String toIr() => representation;
-
-  static const IrLinkage private = const IrLinkage._('private');
-
-  static const IrLinkage internal = const IrLinkage._('internal');
-
-  static const IrLinkage availableExternally =
-      const IrLinkage._('available_externally');
-
-  static const IrLinkage linkonce = const IrLinkage._('linkonce');
-
-  static const IrLinkage weak = const IrLinkage._('weak');
-
-  static const IrLinkage common = const IrLinkage._('common');
-
-  static const IrLinkage appending = const IrLinkage._('appending');
-
-  static const IrLinkage externWeak = const IrLinkage._('extern_weak');
-
-  static const IrLinkage linkonceOdr = const IrLinkage._('linkonce_odr');
-
-  static const IrLinkage weakOdr = const IrLinkage._('weak_odr');
-
-  static const IrLinkage external = const IrLinkage._('external');
-}
-
 class IrGetElementPtr implements ToIr, IrRhsExpression {
   IrType type;
 
@@ -258,33 +209,9 @@ abstract class IrData implements ToIr {
   IrType get type;
 }
 
-abstract class IrIntData implements ToIr, IrData {}
-
-class IrConstantI8 implements ToIr, IrRhsExpression, IrIntData {
-  final IrType type = irI8;
-
-  int value;
-
-  IrConstantI8(this.value);
-
-  @override
-  String toIr() => '${type.toIr()} $value';
+abstract class IrIntData implements ToIr, IrData {
+  String toIrData();
 }
-
-IrConstantI8 irConstantI8(int value) => new IrConstantI8(value);
-
-class IrConstantI32 implements ToIr, IrRhsExpression, IrIntData {
-  final IrType type = irI32;
-
-  int value;
-
-  IrConstantI32(this.value);
-
-  @override
-  String toIr() => '${type.toIr()} $value';
-}
-
-IrConstantI32 irConstantI32(int value) => new IrConstantI32(value);
 
 class IrAssign implements IrStatement, ToIr {
   String name;
@@ -318,16 +245,89 @@ class IrCall implements IrStatement, IrRhsExpression, ToIr {
   }
 }
 
-class IrModule implements ToIr, IrTopLevel {
-  List<IrTopLevel> constructs = <IrTopLevel>[];
+class IrAlloca implements IrRhsExpression, ToIr {
+  IrType type;
 
-  IrModule(this.constructs);
+  IrIntData numElements;
 
-  IrModule add(IrTopLevel construct) {
-    constructs.add(construct);
-    return this;
-  }
+  // TODO align
+
+  // TODO addrspace
+
+  IrAlloca(this.type, [this.numElements]);
 
   @override
-  String toIr() => constructs.map((c) => c.toIr()).join('\n\n');
+  String toIr() {
+    StringBuffer sb = new StringBuffer();
+    sb.write('alloca ${type.toIr()}');
+    if (numElements != null) {
+      sb.write(',  ${numElements.toIr()}');
+    }
+    return sb.toString();
+  }
+}
+
+class IrStore implements IrStatement, ToIr {
+  IrVar dst;
+
+  IrData src;
+
+  // TODO volatile
+
+  // TODO atomic
+
+  // TODO align
+
+  // TODO metadata
+
+  IrStore(this.dst, this.src);
+
+  @override
+  String toIr() {
+    StringBuffer sb = new StringBuffer();
+    sb.write('store ${src.toIr()}, ${dst.toIr()}');
+    return sb.toString();
+  }
+}
+
+class IrLoad implements IrRhsExpression, ToIr {
+  IrType type;
+
+  IrVar dst;
+
+  // TODO align
+
+  // TODO volatile
+
+  // TODO metadata
+
+  IrLoad(this.type, this.dst);
+
+  @override
+  String toIr() {
+    StringBuffer sb = new StringBuffer();
+    sb.write('load ${type.toIr()}, ${dst.toIr()}');
+    return sb.toString();
+  }
+}
+
+class IrAdd implements IrRhsExpression, ToIr {
+  IrIntType type;
+
+  IrIntData op1;
+
+  IrIntData op2;
+
+  // TODO num
+
+  // TODO nsw
+
+  IrAdd(this.type, this.op1, this.op2);
+
+  @override
+  String toIr() {
+    StringBuffer sb = new StringBuffer();
+    sb.write('add ${type.toIr()} ${op1.toIrData()}, ${op2.toIrData()}');
+    return sb.toString();
+  }
 }

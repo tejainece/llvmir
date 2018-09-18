@@ -11,7 +11,9 @@ class IrPointerType implements ToIr, IrType {
   String toIr() => '${type.toIr()}*';
 }
 
-class IrI8 implements ToIr, IrType {
+abstract class IrIntType implements IrType, ToIr {}
+
+class IrI8 implements ToIr, IrIntType {
   const IrI8();
 
   @override
@@ -22,7 +24,7 @@ const IrI8 irI8 = const IrI8();
 
 final IrPointerType irI8Ptr = new IrPointerType(irI8);
 
-class IrI32 implements ToIr, IrType {
+class IrI32 implements ToIr, IrIntType {
   const IrI32();
 
   @override
